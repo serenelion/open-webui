@@ -93,8 +93,8 @@ jobs:
             EOF
 
             # Pull latest images and restart services
-            docker-compose pull
-            docker-compose up -d
+            docker compose pull
+            docker compose up -d
 
             # Clean up old images
             docker image prune -f
@@ -104,12 +104,12 @@ jobs:
             sleep 30
 
             # Check if services are running
-            if docker-compose ps | grep -q "Up"; then
+            if docker compose ps | grep -q "Up"; then
               echo "✅ Deployment successful!"
               echo "🌐 Open WebUI is available at: http://${{ secrets.DROPLET_HOST }}"
             else
               echo "❌ Deployment failed!"
-              docker-compose logs
+              docker compose logs
               exit 1
             fi
 
