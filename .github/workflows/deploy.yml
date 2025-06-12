@@ -1,0 +1,124 @@
+name: Deploy to DigitalOcean Droplet
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            USE_OLLAMA=true
+
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USERNAME }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            # Create app directory if it doesn't exist
+            mkdir -p /opt/open-webui
+            cd /opt/open-webui
+
+            # Create docker-compose.yml
+            cat > docker-compose.yml << 'EOF'
+            version: '3.8'
+
+            services:
+              open-webui:
+                image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                container_name: open-webui
+                ports:
+                  - "80:8080"
+                volumes:
+                  - open-webui-data:/app/backend/data
+                environment:
+                  - WEBUI_SECRET_KEY=${{ secrets.WEBUI_SECRET_KEY || 'your-secret-key-here' }}
+                  - OLLAMA_BASE_URL=http://ollama:11434
+                restart: unless-stopped
+                depends_on:
+                  - ollama
+
+              ollama:
+                image: ollama/ollama:latest
+                container_name: ollama
+                volumes:
+                  - ollama-data:/root/.ollama
+                ports:
+                  - "11434:11434"
+                restart: unless-stopped
+
+            volumes:
+              open-webui-data:
+              ollama-data:
+            EOF
+
+            # Pull latest images and restart services
+            docker-compose pull
+            docker-compose up -d
+
+            # Clean up old images
+            docker image prune -f
+
+            # Wait for services to be ready
+            echo "Waiting for services to start..."
+            sleep 30
+
+            # Check if services are running
+            if docker-compose ps | grep -q "Up"; then
+              echo "✅ Deployment successful!"
+              echo "🌐 Open WebUI is available at: http://${{ secrets.DROPLET_HOST }}"
+            else
+              echo "❌ Deployment failed!"
+              docker-compose logs
+              exit 1
+            fi
+
+      - name: Health Check
+        run: |
+          echo "Performing health check..."
+          sleep 10
+          if curl -f http://${{ secrets.DROPLET_HOST }}/health; then
+            echo "✅ Health check passed!"
+          else
+            echo "⚠️ Health check failed, but deployment may still be starting..."
+          fi

@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  open-webui:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    container_name: open-webui
+    ports:
+      - "80:8080"
+    volumes:
+      - open-webui-data:/app/backend/data
+    environment:
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-your-secret-key-here}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - ENV=prod
+      - WEBUI_AUTH=True
+      - ENABLE_SIGNUP=${ENABLE_SIGNUP:-True}
+      - DEFAULT_USER_ROLE=${DEFAULT_USER_ROLE:-pending}
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  open-webui-data:
+    driver: local
+  ollama-data:
+    driver: local
+
+networks:
+  default:
+    name: open-webui-network

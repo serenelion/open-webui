@@ -1,0 +1,77 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to rollback to (e.g., main, sha-abc123)'
+        required: true
+        default: 'main'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Rollback to Previous Version
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USERNAME }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/open-webui
+            
+            echo "🔄 Rolling back to image tag: ${{ inputs.image_tag }}"
+            
+            # Update docker-compose.yml with the specified tag
+            sed -i "s|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}|g" docker-compose.yml
+            
+            # Pull the specified image
+            docker-compose pull open-webui
+            
+            # Stop current containers
+            docker-compose down
+            
+            # Start with the rolled back image
+            docker-compose up -d
+            
+            # Wait for services to be ready
+            echo "Waiting for services to start..."
+            sleep 30
+            
+            # Check if services are running
+            if docker-compose ps | grep -q "Up"; then
+              echo "✅ Rollback successful!"
+              echo "🌐 Open WebUI is available at: http://${{ secrets.DROPLET_HOST }}"
+              
+              # Show current running containers
+              echo "📋 Current running containers:"
+              docker-compose ps
+            else
+              echo "❌ Rollback failed!"
+              docker-compose logs
+              exit 1
+            fi
+
+      - name: Health Check
+        run: |
+          echo "Performing health check after rollback..."
+          sleep 10
+          if curl -f http://${{ secrets.DROPLET_HOST }}/health; then
+            echo "✅ Health check passed!"
+          else
+            echo "⚠️ Health check failed, but service may still be starting..."
+          fi
+
+      - name: Notify Rollback
+        run: |
+          echo "🔄 Rollback completed to tag: ${{ inputs.image_tag }}"
+          echo "🌐 Service URL: http://${{ secrets.DROPLET_HOST }}"
