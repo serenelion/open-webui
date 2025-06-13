@@ -1312,7 +1312,11 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 
 	for (const [path, methods] of Object.entries(openApiSpec.paths)) {
 		for (const [method, operation] of Object.entries(methods)) {
-			if (operation?.operationId) {
+			let operationId = operation?.operationId;
+			if (!operationId) {
+				operationId = method + path.replace("/", "_")
+			}
+			if (operationId) {
 				const tool = {
 					type: 'function',
 					name: operation.operationId,
