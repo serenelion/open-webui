@@ -392,10 +392,13 @@ def convert_openapi_to_tool_payload(openapi_spec):
 
     for path, methods in openapi_spec.get("paths", {}).items():
         for method, operation in methods.items():
-            if operation.get("operationId"):
+            operation_id = operation.get("operationId")
+            if operation_id is None:
+                operation_id = method + path.replace("/", "_")
+            if operation_id:
                 tool = {
                     "type": "function",
-                    "name": operation.get("operationId"),
+                    "name": operation_id,
                     "description": operation.get(
                         "description",
                         operation.get("summary", "No description available."),
