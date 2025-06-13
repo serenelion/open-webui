@@ -29,6 +29,9 @@
 
 	let auth_type = 'bearer';
 	let key = '';
+	let username = '';
+	let password = '';
+	let header_name = '';
 
 	let accessControl = {};
 
@@ -53,7 +56,12 @@
 		if (direct) {
 			const res = await getToolServerData(
 				auth_type === 'bearer' ? key : localStorage.token,
-				path.includes('://') ? path : `${url}${path.startsWith('/') ? '' : '/'}${path}`
+				path.includes('://') ? path : `${url}${path.startsWith('/') ? '' : '/'}${path}`,
+				auth_type,
+				{
+					...(auth_type === 'basic' && { username, password }),
+					...(auth_type === 'header' && { header_name, key })
+				}
 			).catch((err) => {
 				toast.error($i18n.t('Connection failed'));
 			});
@@ -68,6 +76,8 @@
 				path,
 				auth_type,
 				key,
+				...(auth_type === 'basic' && { username, password }),
+				...(auth_type === 'header' && { header_name }),
 				config: {
 					enable: enable,
 					access_control: accessControl
@@ -90,6 +100,35 @@
 	const submitHandler = async () => {
 		loading = true;
 
+		// Validate authentication fields
+		if (auth_type === 'basic') {
+			if (!username) {
+				loading = false;
+				toast.error($i18n.t('Username is required for Basic authentication'));
+				return;
+			}
+			if (!password) {
+				loading = false;
+				toast.error($i18n.t('Password is required for Basic authentication'));
+				return;
+			}
+		} else if (auth_type === 'header') {
+			if (!header_name) {
+				loading = false;
+				toast.error($i18n.t('Header name is required for Header authentication'));
+				return;
+			}
+			if (!key) {
+				loading = false;
+				toast.error($i18n.t('API Key is required for Header authentication'));
+				return;
+			}
+		} else if (auth_type === 'bearer' && !key) {
+			loading = false;
+			toast.error($i18n.t('API Key is required for Bearer authentication'));
+			return;
+		}
+
 		// remove trailing slash from url
 		url = url.replace(/\/$/, '');
 
@@ -98,6 +137,8 @@
 			path,
 			auth_type,
 			key,
+			...(auth_type === 'basic' && { username, password }),
+			...(auth_type === 'header' && { header_name }),
 			config: {
 				enable: enable,
 				access_control: accessControl
@@ -117,6 +158,9 @@
 		path = 'openapi.json';
 		key = '';
 		auth_type = 'bearer';
+		username = '';
+		password = '';
+		header_name = '';
 
 		name = '';
 		description = '';
@@ -132,6 +176,9 @@
 
 			auth_type = connection?.auth_type ?? 'bearer';
 			key = connection?.key ?? '';
+			username = connection?.username ?? '';
+			password = connection?.password ?? '';
+			header_name = connection?.header_name ?? '';
 
 			name = connection.info?.name ?? '';
 			description = connection.info?.description ?? '';
@@ -267,6 +314,8 @@
 										>
 											<option value="bearer">Bearer</option>
 											<option value="session">Session</option>
+											<option value="basic">Basic</option>
+											<option value="header">Header</option>
 										</select>
 									</div>
 
@@ -281,6 +330,40 @@
 										{:else if auth_type === 'session'}
 											<div class="text-xs text-gray-500 self-center translate-y-[1px]">
 												{$i18n.t('Forwards system user session credentials to authenticate')}
+											</div>
+										{:else if auth_type === 'basic'}
+											<div class="flex flex-col w-full gap-2">
+												<input
+													class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+													type="text"
+													bind:value={username}
+													placeholder={$i18n.t('Username')}
+													autocomplete="off"
+													required
+												/>
+												<SensitiveInput
+													className="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+													bind:value={password}
+													placeholder={$i18n.t('Password')}
+													required={true}
+												/>
+											</div>
+										{:else if auth_type === 'header'}
+											<div class="flex flex-col w-full gap-2">
+												<input
+													class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+													type="text"
+													bind:value={header_name}
+													placeholder={$i18n.t('Header Name (e.g. X-API-Key)')}
+													autocomplete="off"
+													required
+												/>
+												<SensitiveInput
+													className="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+													bind:value={key}
+													placeholder={$i18n.t('API Key')}
+													required={true}
+												/>
 											</div>
 										{/if}
 									</div>

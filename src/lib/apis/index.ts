@@ -292,16 +292,30 @@ export const getTaskIdsByChatId = async (token: string, chat_id: string) => {
 	return res;
 };
 
-export const getToolServerData = async (token: string, url: string) => {
+export const getToolServerData = async (token: string, url: string, authType: string = 'bearer', authData: any = null) => {
 	let error = null;
+
+	// Prepare headers
+	const headers: Record<string, string> = {
+		Accept: 'application/json',
+		'Content-Type': 'application/json'
+	};
+	
+	// Handle different authentication types
+	if (authType === 'bearer' && token) {
+		headers['Authorization'] = `Bearer ${token}`;
+	} else if (authType === 'session' && token) {
+		headers['Authorization'] = `Bearer ${token}`;
+	} else if (authType === 'basic' && authData) {
+		const auth = btoa(`${authData.username}:${authData.password}`);
+		headers['Authorization'] = `Basic ${auth}`;
+	} else if (authType === 'header' && authData) {
+		headers[authData.header_name] = authData.key;
+	}
 
 	const res = await fetch(`${url}`, {
 		method: 'GET',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		}
+		headers: headers
 	})
 		.then(async (res) => {
 			// Check if URL ends with .yaml or .yml to determine format
