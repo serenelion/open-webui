@@ -452,7 +452,7 @@ export const executeToolServer = async (
 		const [routePath, methods] = matchingRoute;
 
 		const methodEntry = Object.entries(methods as any).find(
-			([_, operation]: any) => operation.operationId === name
+			([method, operation]: any) => operation.operationId === name || method + routePath.replace("/", "_") === name
 		);
 
 		if (!methodEntry) {
