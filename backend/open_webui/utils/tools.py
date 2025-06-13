@@ -602,7 +602,10 @@ async def execute_tool_server(
         matching_route = None
         for route_path, methods in paths.items():
             for http_method, operation in methods.items():
-                if isinstance(operation, dict) and operation.get("operationId") == name:
+                operation_id = operation.get("operationId")
+                if operation_id is None:
+                    operation_id = http_method + route_path.replace("/", "_")
+                if isinstance(operation, dict) and operation_id == name:
                     matching_route = (route_path, methods)
                     break
             if matching_route:
@@ -615,7 +618,10 @@ async def execute_tool_server(
 
         method_entry = None
         for http_method, operation in methods.items():
-            if operation.get("operationId") == name:
+            operation_id = operation.get("operationId")
+            if operation_id is None:
+                operation_id = http_method + route_path.replace("/", "_")
+            if operation_id == name:
                 method_entry = (http_method.lower(), operation)
                 break
 
