@@ -441,8 +441,8 @@ export const executeToolServer = async (
 
 	try {
 		// Find the matching operationId in the OpenAPI spec
-		const matchingRoute = Object.entries(serverData.openapi.paths).find(([_, methods]) =>
-			Object.entries(methods as any).some(([__, operation]: any) => operation.operationId === name)
+		const matchingRoute = Object.entries(serverData.openapi.paths).find(([path, methods]) =>
+			Object.entries(methods as any).some(([method, operation]: any) => operation.operationId === name || method + path.replace("/", "_") === name)
 		);
 
 		if (!matchingRoute) {
