@@ -1306,6 +1306,17 @@ function resolveSchema(schemaRef, components, resolvedSchemas = new Set()) {
 	return {};
 }
 
+// Helper function to resolve parameter references
+function resolveParameterRef(param, components) {
+	if (param['$ref']) {
+		const refPath = param['$ref'];
+		const paramName = refPath.split('/').pop();
+		// Look up the parameter in components.parameters
+		return components.parameters?.[paramName] || param;
+	}
+	return param;
+}
+
 // Main conversion function
 export const convertOpenApiToToolPayload = (openApiSpec) => {
 	const toolPayload = [];
@@ -1331,17 +1342,24 @@ export const convertOpenApiToToolPayload = (openApiSpec) => {
 				// Extract path and query parameters
 				if (operation.parameters) {
 					operation.parameters.forEach((param) => {
-						let description = param.schema.description || param.description || '';
-						if (param.schema.enum && Array.isArray(param.schema.enum)) {
-							description += `. Possible values: ${param.schema.enum.join(', ')}`;
+						// Resolve parameter reference if it uses $ref
+						const resolvedParam = resolveParameterRef(param, openApiSpec);
+
+						// Make sure the schema exists
+						const schema = resolvedParam.schema || {};
+
+						let description = schema.description || resolvedParam.description || '';
+						if (schema.enum && Array.isArray(schema.enum)) {
+							description += `. Possible values: ${schema.enum.join(', ')}`;
 						}
-						tool.parameters.properties[param.name] = {
-							type: param.schema.type,
+
+						tool.parameters.properties[resolvedParam.name] = {
+							type: schema.type || 'string', // Default to string if type is not specified
 							description: description
 						};
 
-						if (param.required) {
-							tool.parameters.required.push(param.name);
+						if (resolvedParam.required) {
+							tool.parameters.required.push(resolvedParam.name);
 						}
 					});
 				}
