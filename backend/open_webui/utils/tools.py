@@ -93,13 +93,26 @@ def get_tools(
 
                     auth_type = tool_server_connection.get("auth_type", "bearer")
                     token = None
+                    auth_data = None
 
                     if auth_type == "bearer":
                         token = tool_server_connection.get("key", "")
                     elif auth_type == "session":
                         token = request.state.token.credentials
+                    elif auth_type == "basic":
+                        auth_data = {
+                            "auth_type": "basic",
+                            "username": tool_server_connection.get("username", ""),
+                            "password": tool_server_connection.get("password", "")
+                        }
+                    elif auth_type == "header":
+                        auth_data = {
+                            "auth_type": "header",
+                            "header_name": tool_server_connection.get("header_name", ""),
+                            "key": tool_server_connection.get("key", "")
+                        }
 
-                    def make_tool_function(function_name, token, tool_server_data):
+                    def make_tool_function(function_name, token, tool_server_data, auth_data=None):
                         async def tool_function(**kwargs):
                             print(
                                 f"Executing tool function {function_name} with params: {kwargs}"
@@ -110,12 +123,13 @@ def get_tools(
                                 name=function_name,
                                 params=kwargs,
                                 server_data=tool_server_data,
+                                auth_data=auth_data,
                             )
 
                         return tool_function
 
                     tool_function = make_tool_function(
-                        function_name, token, tool_server_data
+                        function_name, token, tool_server_data, auth_data
                     )
 
                     callable = get_async_tool_function_and_apply_extra_params(
@@ -440,12 +454,22 @@ def convert_openapi_to_tool_payload(openapi_spec):
     return tool_payload
 
 
-async def get_tool_server_data(token: str, url: str) -> Dict[str, Any]:
+async def get_tool_server_data(token: str, url: str, auth_data: Dict[str, Any] = None) -> Dict[str, Any]:
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
     }
-    if token:
+    
+    # Handle different authentication types
+    if auth_data and "auth_type" in auth_data:
+        if auth_data["auth_type"] == "basic":
+            import base64
+            auth_str = f"{auth_data['username']}:{auth_data['password']}"
+            encoded = base64.b64encode(auth_str.encode()).decode()
+            headers["Authorization"] = f"Basic {encoded}"
+        elif auth_data["auth_type"] == "header" and "header_name" in auth_data and "key" in auth_data:
+            headers[auth_data["header_name"]] = auth_data["key"]
+    elif token:
         headers["Authorization"] = f"Bearer {token}"
 
     error = None
@@ -506,16 +530,30 @@ async def get_tool_servers_data(
 
             auth_type = server.get("auth_type", "bearer")
             token = None
+            auth_data = None
 
             if auth_type == "bearer":
                 token = server.get("key", "")
             elif auth_type == "session":
                 token = session_token
-            server_entries.append((idx, server, full_url, info, token))
+            elif auth_type == "basic":
+                auth_data = {
+                    "auth_type": "basic",
+                    "username": server.get("username", ""),
+                    "password": server.get("password", "")
+                }
+            elif auth_type == "header":
+                auth_data = {
+                    "auth_type": "header",
+                    "header_name": server.get("header_name", ""),
+                    "key": server.get("key", "")
+                }
+            
+            server_entries.append((idx, server, full_url, info, token, auth_data))
 
     # Create async tasks to fetch data
     tasks = [
-        get_tool_server_data(token, url) for (_, _, url, _, token) in server_entries
+        get_tool_server_data(token, url, auth_data) for (_, _, url, _, token, auth_data) in server_entries
     ]
 
     # Execute tasks concurrently
@@ -523,7 +561,7 @@ async def get_tool_servers_data(
 
     # Build final results with index and server metadata
     results = []
-    for (idx, server, url, info, _), response in zip(server_entries, responses):
+    for (idx, server, url, info, _, _), response in zip(server_entries, responses):
         if isinstance(response, Exception):
             log.error(f"Failed to connect to {url} OpenAPI tool server")
             continue
@@ -551,7 +589,7 @@ async def get_tool_servers_data(
 
 
 async def execute_tool_server(
-    token: str, url: str, name: str, params: Dict[str, Any], server_data: Dict[str, Any]
+    token: str, url: str, name: str, params: Dict[str, Any], server_data: Dict[str, Any], auth_data: Dict[str, Any] = None
 ) -> Any:
     error = None
     try:
@@ -614,7 +652,16 @@ async def execute_tool_server(
 
         headers = {"Content-Type": "application/json"}
 
-        if token:
+        # Handle different authentication types
+        if auth_data and "auth_type" in auth_data:
+            if auth_data["auth_type"] == "basic":
+                import base64
+                auth_str = f"{auth_data['username']}:{auth_data['password']}"
+                encoded = base64.b64encode(auth_str.encode()).decode()
+                headers["Authorization"] = f"Basic {encoded}"
+            elif auth_data["auth_type"] == "header" and "header_name" in auth_data and "key" in auth_data:
+                headers[auth_data["header_name"]] = auth_data["key"]
+        elif token:
             headers["Authorization"] = f"Bearer {token}"
 
         async with aiohttp.ClientSession(trust_env=True) as session:

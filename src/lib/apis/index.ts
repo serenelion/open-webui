@@ -344,12 +344,52 @@ export const getToolServersData = async (i18n, servers: object[]) => {
 			servers
 				.filter((server) => server?.config?.enable)
 				.map(async (server) => {
-					const data = await getToolServerData(
-						(server?.auth_type ?? 'bearer') === 'bearer' ? server?.key : localStorage.token,
-						(server?.path ?? '').includes('://')
-							? server?.path
-							: `${server?.url}${(server?.path ?? '').startsWith('/') ? '' : '/'}${server?.path}`
-					).catch((err) => {
+					// Determine authentication method and prepare headers
+					let token = null;
+					let headers = {
+						Accept: 'application/json',
+						'Content-Type': 'application/json'
+					};
+
+					const authType = server?.auth_type ?? 'bearer';
+					
+					if (authType === 'bearer') {
+						token = server?.key;
+						headers['Authorization'] = `Bearer ${token}`;
+					} else if (authType === 'session') {
+						token = localStorage.token;
+						headers['Authorization'] = `Bearer ${token}`;
+					} else if (authType === 'basic') {
+						const auth = btoa(`${server?.username}:${server?.password}`);
+						headers['Authorization'] = `Basic ${auth}`;
+					} else if (authType === 'header') {
+						headers[server?.header_name] = server?.key;
+					}
+
+					const url = (server?.path ?? '').includes('://')
+						? server?.path
+						: `${server?.url}${(server?.path ?? '').startsWith('/') ? '' : '/'}${server?.path}`;
+
+					const data = await fetch(url, { headers })
+						.then(async (res) => {
+							// Check if URL ends with .yaml or .yml to determine format
+							if (url.toLowerCase().endsWith('.yaml') || url.toLowerCase().endsWith('.yml')) {
+								if (!res.ok) throw await res.text();
+								const text = await res.text();
+								return parse(text);
+							} else {
+								if (!res.ok) throw await res.json();
+								return res.json();
+							}
+						})
+						.then((res) => {
+							return {
+								openapi: res,
+								info: res.info,
+								specs: convertOpenApiToToolPayload(res)
+							};
+						})
+						.catch((err) => {
 						toast.error(
 							i18n.t(`Failed to connect to {{URL}} OpenAPI tool server`, {
 								URL: (server?.path ?? '').includes('://')
@@ -379,7 +419,9 @@ export const executeToolServer = async (
 	url: string,
 	name: string,
 	params: Record<string, any>,
-	serverData: { openapi: any; info: any; specs: any }
+	serverData: { openapi: any; info: any; specs: any },
+	authType: string = 'bearer',
+	authData: any = null
 ) => {
 	let error = null;
 
@@ -452,9 +494,20 @@ export const executeToolServer = async (
 
 		// Prepare headers and request options
 		const headers: Record<string, string> = {
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
+			'Content-Type': 'application/json'
 		};
+		
+		// Handle different authentication types
+		if (authType === 'bearer' && token) {
+			headers['Authorization'] = `Bearer ${token}`;
+		} else if (authType === 'session' && token) {
+			headers['Authorization'] = `Bearer ${token}`;
+		} else if (authType === 'basic' && authData) {
+			const auth = btoa(`${authData.username}:${authData.password}`);
+			headers['Authorization'] = `Basic ${auth}`;
+		} else if (authType === 'header' && authData) {
+			headers[authData.header_name] = authData.key;
+		}
 
 		let requestOptions: RequestInit = {
 			method: httpMethod.toUpperCase(),

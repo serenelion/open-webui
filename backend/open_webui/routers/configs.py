@@ -76,8 +76,11 @@ async def set_direct_connections_config(
 class ToolServerConnection(BaseModel):
     url: str
     path: str
-    auth_type: Optional[str]
+    auth_type: Optional[str]  # "bearer", "session", "basic", "header"
     key: Optional[str]
+    username: Optional[str]  # For basic auth
+    password: Optional[str]  # For basic auth
+    header_name: Optional[str]  # For header auth
     config: Optional[dict]
 
     model_config = ConfigDict(extra="allow")
@@ -121,15 +124,29 @@ async def verify_tool_servers_config(
     Verify the connection to the tool server.
     """
     try:
-
         token = None
-        if form_data.auth_type == "bearer":
+        auth_type = form_data.auth_type or "bearer"
+        auth_data = {}
+
+        if auth_type == "bearer":
             token = form_data.key
-        elif form_data.auth_type == "session":
+        elif auth_type == "session":
             token = request.state.token.credentials
+        elif auth_type == "basic":
+            auth_data = {
+                "auth_type": "basic",
+                "username": form_data.username,
+                "password": form_data.password
+            }
+        elif auth_type == "header":
+            auth_data = {
+                "auth_type": "header",
+                "header_name": form_data.header_name,
+                "key": form_data.key
+            }
 
         url = f"{form_data.url}/{form_data.path}"
-        return await get_tool_server_data(token, url)
+        return await get_tool_server_data(token, url, auth_data)
     except Exception as e:
         raise HTTPException(
             status_code=400,
