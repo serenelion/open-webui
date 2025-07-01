@@ -914,6 +914,12 @@ TOOL_SERVER_CONNECTIONS = PersistentConfig(
     tool_server_connections,
 )
 
+ENABLE_TOOL_RESULT_PERSISTENCE = PersistentConfig(
+    "ENABLE_TOOL_RESULT_PERSISTENCE",
+    "tool_server.enable_result_persistence",
+    os.environ.get("ENABLE_TOOL_RESULT_PERSISTENCE", "True").lower() == "true",
+)
+
 ####################################
 # WEBUI
 ####################################

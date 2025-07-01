@@ -86,7 +86,10 @@ from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.tasks import create_task
 
 from open_webui.config import (
-    CACHE_DIR,
+    ENABLE_MESSAGE_RATING,
+    ENABLE_COMMUNITY_SHARING,
+    WEBHOOK_URL,
+    ENABLE_TOOL_RESULT_PERSISTENCE,
     DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
     DEFAULT_CODE_INTERPRETER_PROMPT,
 )
@@ -272,6 +275,29 @@ async def chat_completion_tools_handler(
                             f"\nTool `{tool_name}` Output: {tool_result}",
                             body["messages"],
                         )
+
+                    # Add tool call and result messages to conversation history if persistence is enabled
+                    if ENABLE_TOOL_RESULT_PERSISTENCE.value:
+                        # Add tool call message
+                        body["messages"].append({
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [{
+                                "id": str(uuid4()),
+                                "type": "function",
+                                "function": {
+                                    "name": tool_function_name,
+                                    "arguments": json.dumps(tool_function_params)
+                                }
+                            }]
+                        })
+                        
+                        # Add tool result message
+                        body["messages"].append({
+                            "role": "tool",
+                            "tool_call_id": body["messages"][-1]["tool_calls"][0]["id"],
+                            "content": tool_result
+                        })
 
                     if (
                         tools[tool_function_name]
