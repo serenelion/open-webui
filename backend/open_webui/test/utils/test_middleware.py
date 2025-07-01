@@ -64,8 +64,7 @@ class TestMiddleware:
     @pytest.mark.asyncio
     async def test_tool_persistence_enabled(self):
         """Test that tool calls and results are added to messages when persistence is enabled."""
-        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE') as mock_persistence:
-            mock_persistence.value = True
+        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE', True):
             
             with patch('open_webui.utils.middleware.generate_chat_completion') as mock_generate:
                 # Mock the response from the function calling model
@@ -124,8 +123,7 @@ class TestMiddleware:
     @pytest.mark.asyncio
     async def test_tool_persistence_disabled(self):
         """Test that tool calls and results are NOT added to messages when persistence is disabled."""
-        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE') as mock_persistence:
-            mock_persistence.value = False
+        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE', False):
             
             with patch('open_webui.utils.middleware.generate_chat_completion') as mock_generate:
                 # Mock the response from the function calling model
@@ -164,8 +162,7 @@ class TestMiddleware:
     @pytest.mark.asyncio
     async def test_tool_call_id_consistency(self):
         """Test that tool call IDs are consistent between tool call and result messages."""
-        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE') as mock_persistence:
-            mock_persistence.value = True
+        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE', True):
             
             with patch('open_webui.utils.middleware.generate_chat_completion') as mock_generate:
                 mock_response = {
@@ -231,8 +228,7 @@ class TestMiddleware:
             }
         }
         
-        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE') as mock_persistence:
-            mock_persistence.value = True
+        with patch('open_webui.utils.middleware.ENABLE_TOOL_RESULT_PERSISTENCE', True):
             
             with patch('open_webui.utils.middleware.generate_chat_completion') as mock_generate:
                 # Mock response with multiple tool calls

@@ -277,7 +277,7 @@ async def chat_completion_tools_handler(
                         )
 
                     # Add tool call and result messages to conversation history if persistence is enabled
-                    if ENABLE_TOOL_RESULT_PERSISTENCE.value:
+                    if ENABLE_TOOL_RESULT_PERSISTENCE:
                         # Add tool call message
                         body["messages"].append({
                             "role": "assistant",
