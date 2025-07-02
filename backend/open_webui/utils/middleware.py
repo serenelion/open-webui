@@ -278,26 +278,75 @@ async def chat_completion_tools_handler(
 
                     # Add tool call and result messages to conversation history if persistence is enabled
                     if ENABLE_TOOL_RESULT_PERSISTENCE:
+                        tool_call_id = str(uuid4())
+                        
                         # Add tool call message
-                        body["messages"].append({
+                        tool_call_message = {
                             "role": "assistant",
                             "content": None,
                             "tool_calls": [{
-                                "id": str(uuid4()),
+                                "id": tool_call_id,
                                 "type": "function",
                                 "function": {
                                     "name": tool_function_name,
                                     "arguments": json.dumps(tool_function_params)
                                 }
                             }]
-                        })
+                        }
+                        body["messages"].append(tool_call_message)
                         
                         # Add tool result message
-                        body["messages"].append({
+                        tool_result_message = {
                             "role": "tool",
-                            "tool_call_id": body["messages"][-1]["tool_calls"][0]["id"],
+                            "tool_call_id": tool_call_id,
                             "content": tool_result
-                        })
+                        }
+                        body["messages"].append(tool_result_message)
+                        
+                        # Save tool call and result messages to database if we have chat context
+                        if metadata.get("chat_id") and metadata.get("message_id"):
+                            # Generate unique message IDs for the tool call and result messages
+                            tool_call_message_id = str(uuid4())
+                            tool_result_message_id = str(uuid4())
+                            
+                            # Get the current user message ID to link the tool call message properly
+                            current_message_id = metadata["message_id"]
+                            
+                            # Add parentId to link tool call message to the user message
+                            tool_call_message_with_parent = {
+                                **tool_call_message,
+                                "parentId": current_message_id
+                            }
+                            
+                            # Add parentId to link tool result message to the tool call message
+                            tool_result_message_with_parent = {
+                                **tool_result_message,
+                                "parentId": tool_call_message_id
+                            }
+                            
+                            # Save tool call message to database
+                            Chats.upsert_message_to_chat_by_id_and_message_id(
+                                metadata["chat_id"],
+                                tool_call_message_id,
+                                tool_call_message_with_parent
+                            )
+                            
+                            # Save tool result message to database
+                            Chats.upsert_message_to_chat_by_id_and_message_id(
+                                metadata["chat_id"],
+                                tool_result_message_id,
+                                tool_result_message_with_parent
+                            )
+                            
+                            # Update the chat's currentId to point to the tool result message
+                            # so that subsequent messages will be linked to the tool result
+                            chat = Chats.get_chat_by_id(metadata["chat_id"])
+                            if chat:
+                                updated_chat = chat.chat
+                                if "history" not in updated_chat:
+                                    updated_chat["history"] = {}
+                                updated_chat["history"]["currentId"] = tool_result_message_id
+                                Chats.update_chat_by_id(metadata["chat_id"], updated_chat)
 
                     if (
                         tools[tool_function_name]
