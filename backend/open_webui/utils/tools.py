@@ -127,6 +127,10 @@ def get_tools(
                         "tool_id": tool_id,
                         "callable": callable,
                         "spec": spec,
+                        "metadata": {
+                            # TODO should the server or function specify this somehow?
+                            "citation": True
+                        }
                     }
 
                     # TODO: if collision, prepend toolkit name
